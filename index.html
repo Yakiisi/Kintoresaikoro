@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>筋トレサイコロ</title>
+  <style>
+        body {
+      margin: 0;
+      font-family: sans-serif;
+      background: #5ab9ea;
+      height: 100vh;
+      display: flex;
+      flex-direction: row;
+      flex-wrap: wrap;
+      overflow: hidden;
+    }
+    
+    @media (orientation: portrait) {
+      body {
+        flex-direction: column;
+      }
+    }
+    
+    .left, .right {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      padding: 2vh 2vw;
+      box-sizing: border-box;
+      width: 100%;
+    }
+
+    .right {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      padding: 2vh 2vw;
+      box-sizing: border-box;
+      width: 100%;
+      height: 100vh;
+    }
+
+    
+    .scene {
+      width: 30vmin;
+      height: 30vmin;
+      max-width: 90vw;
+      max-height: 90vw;
+      perspective: 10000px;
+    }
+    
+    .dice {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      transform-style: preserve-3d;
+      transition: transform 1s ease-in-out;
+      transform: scale(1); /* サイコロのサイズを縮小 */
+    }
+    
+    .dice.rolling {
+      animation: spin 3s linear infinite;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotateX(0deg) rotateY(0deg); }
+      100% { transform: rotateX(1440deg) rotateY(1440deg); }
+    }
+    
+    .face {
+      position: absolute;
+      width: 100%;         /* サイコロの面を縮小 */
+      height: 100%;        /* 面のサイズも縮小 */
+      background: white;
+      border: 2px solid #000000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: clamp(6vmin, 12vmin, 15vmin); /* 文字サイズを縮小 */
+      font-weight: bold;
+    }
+    
+    .front  { transform: rotateY(0deg) translateZ(15vmin); }
+    .back   { transform: rotateY(180deg) translateZ(15vmin); }
+    .rightf { transform: rotateY(90deg) translateZ(15vmin); }
+    .leftf  { transform: rotateY(-90deg) translateZ(15vmin); }
+    .top    { transform: rotateX(90deg) translateZ(15vmin); }
+    .bottom { transform: rotateX(-90deg) translateZ(15vmin); }
+    
+    .menu {
+      font-size: clamp(1rem, 2.5vw, 2rem);
+      font-weight: bold;
+      border-bottom: 2px solid #ccc;
+      padding-bottom: 1vh;
+      margin-bottom: 1vh;
+      width: 100%;
+    }
+    
+    .status {
+      font-size: clamp(1.2rem, 3vw, 2rem);
+      margin-bottom: 2vh;
+      color: #333;
+      text-align: center;
+    }
+    
+    button {
+      padding: 2vh 5vw;
+      font-size: clamp(1.5rem, 4vw, 3rem);
+      margin-top: 2vh;
+      cursor: pointer;
+      background-color: #333;
+      color: white;
+      border: none;
+      border-radius: 0.5em;
+      width: 100%;
+      max-width: 800px;
+    }
+    
+    .record {
+      flex: 1;
+      overflow-y: auto;
+      font-size: clamp(1rem, 2vw, 1.5rem);
+      margin-top: 2vh;
+      width: 100%;
+      text-align: left;
+      background-color: rgba(255, 255, 255, 0.2);
+    }
+    
+    .menu-line {
+      display: flex;
+      gap: 1vw;
+      margin-bottom: 0.5vh;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    
+    .menu-line input {
+      font-size: clamp(1rem, 2vw, 1.5rem);
+      padding: 0.5vh 1vw;
+      flex: 1;
+      min-width: 100px;
+    }
+    
+    .menu-line span {
+      font-size: clamp(1rem, 2vw, 1.5rem);
+      width: 2em;
+    }
+
+    .latest {
+      font-size: clamp(1.8rem, 3vw, 2.2rem);
+      font-weight: bold;
+      color: #111;
+    }
+
+    .mult {
+      width: 4em;
+  </style>
+</head>
+<body>
+  <div class="left">
+    <div class="scene">
+      <div class="dice" id="dice">
+        <div class="face front">1</div>
+        <div class="face back">6</div>
+        <div class="face rightf">3</div>
+        <div class="face leftf">4</div>
+        <div class="face top">5</div>
+        <div class="face bottom">2</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="menu" id="menu"></div>
+
+    <div class="status" id="status">やることを決めます</div>
+    <button onclick="rollDice()">サイコロを振る</button>
+
+    <div class="record" id="record"></div>
+  </div>
+
+  <script>
+    const dice = document.getElementById("dice");
+    const recordEl = document.getElementById("record");
+    const statusEl = document.getElementById("status");
+    const menuEl = document.getElementById("menu");
+    const button = document.querySelector("button");
+
+    // サイコロの回転角：各面を前に出すための角度
+    const rotations = {
+      1: [0, 0],       // front
+      2: [90, 0],      // bottom
+      3: [0, -90],     // right
+      4: [0, 90],      // left
+      5: [-90, 0],     // top
+      6: [0, 180]      // back
+    };
+
+    let menuData = {
+      1: { name: "腹筋", mult: 3 },
+      2: { name: "背筋", mult: 3 },
+      3: { name: "スクワット", mult: 3 },
+      4: { name: "腕立て伏せ", mult: 3 },
+      5: { name: "フェニックス", mult: 3 },
+      6: { name: "プランク(秒)", mult: 3 }
+    };
+
+    let phase = "menu";
+    let currentKey = null;
+    let currentReps = null;
+
+    function renderMenuInputs() {
+      menuEl.innerHTML = "";
+      for (let i = 1; i <= 6; i++) {
+        const line = document.createElement("div");
+        line.className = "menu-line";
+        line.innerHTML = `
+          <span>${i}:</span>
+          <input id="name-${i}" value="${menuData[i].name}">
+          <input id="mult-${i}" class="mult" type="number" value="${menuData[i].mult}">
+        `;
+        menuEl.appendChild(line);
+      }
+    }
+
+    renderMenuInputs();
+
+    // 保存キー名
+    const STORAGE_KEY = "kintoresaikoro_list";
+    
+    // localStorage から保存されたメニューを読み込む
+    function loadMenuData() {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          for (let i = 1; i <= 6; i++) {
+            if (parsed[i]) {
+              menuData[i] = parsed[i];
+            }
+          }
+        } catch (e) {
+          console.error("保存データの読み込みに失敗しました。", e);
+        }
+      }
+    }
+    
+    // localStorage に現在のメニューを保存
+    function saveMenuData() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(menuData));
+    }
+    
+    // 入力を反映しつつ保存する
+    function updateMenuDataFromInputs() {
+      for (let i = 1; i <= 6; i++) {
+        const nameInput = document.getElementById(`name-${i}`);
+        const multInput = document.getElementById(`mult-${i}`);
+        menuData[i].name = nameInput.value;
+        menuData[i].mult = parseInt(multInput.value) || 1;
+      }
+      saveMenuData(); // ← 保存をここで実行
+    }
+    
+    // 入力欄の内容が変わったら保存
+    function attachInputListeners() {
+      for (let i = 1; i <= 6; i++) {
+        document.getElementById(`name-${i}`).addEventListener("input", updateMenuDataFromInputs);
+        document.getElementById(`mult-${i}`).addEventListener("input", updateMenuDataFromInputs);
+      }
+    }
+    
+    // 最初に保存済みデータを読み込む
+    loadMenuData();
+    renderMenuInputs();
+    attachInputListeners();  // 入力変更のイベント登録
+
+
+    function rollDice() {
+      // 入力更新
+      for (let i = 1; i <= 6; i++) {
+        const nameInput = document.getElementById(`name-${i}`);
+        const multInput = document.getElementById(`mult-${i}`);
+        menuData[i].name = nameInput.value;
+        menuData[i].mult = parseInt(multInput.value) || 1;
+      }
+
+      button.disabled = true;
+      dice.classList.add("rolling");
+
+      const rolledNum = Math.floor(Math.random() * 6) + 1;
+      const [finalX, finalY] = rotations[rolledNum];
+      const extra = 360 * 3;
+
+      setTimeout(() => {
+        dice.classList.remove("rolling");
+        dice.style.transition = "transform 1s ease-in-out";
+        dice.style.transform = `rotateX(${finalX + extra}deg) rotateY(${finalY + extra}deg)`;
+
+        setTimeout(() => {
+          if (phase === "menu") {
+            currentKey = rolledNum;
+            statusEl.textContent = `かける回数を決めます（${menuData[currentKey].name}｜目：${rolledNum}）`;
+            phase = "reps";
+          } else {
+            currentReps = rolledNum;
+            const { name, mult } = menuData[currentKey];
+            const reps = currentReps * mult;
+            // 既存の latest クラスを外す
+            const latestEl = recordEl.querySelector('.latest');
+            if (latestEl) latestEl.classList.remove('latest');
+            
+            // 新しい記録を先頭に追加して、latest クラスをつける
+            const newRecord = document.createElement("div");
+            newRecord.className = "latest";
+            newRecord.innerHTML = `✅ ${name}：${reps} 回（目：${currentReps} × ${mult}）`;
+            recordEl.prepend(newRecord);
+            statusEl.textContent = "やることを決めます";
+            phase = "menu";
+            currentKey = null;
+            currentReps = null;
+          }
+          button.disabled = false;
+        }, 1000);
+      }, 1000);
+    }
+  </script>
+</body>
+</html>
